@@ -65,24 +65,25 @@ export const TextToEmojiView: React.FC<TextToEmojiViewProps> = ({
   };
 
   return (
-    <div className={embedded ? 'space-y-6' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8'}>
+    <div className={embedded ? 'space-y-6' : 'w-full min-h-screen bg-[#F9F9F9] text-slate-900'}>
+      <div className={embedded ? 'space-y-6' : 'max-w-[1280px] mx-auto px-4 sm:px-8 py-6 space-y-8'}>
       {!embedded && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+        <div className="bg-white border-2 border-slate-200/80 rounded-2xl p-6 shadow-sm">
           <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#FF4925] mb-1">
             <Wand2 className="w-3.5 h-3.5" />
             MEMO Intelligent Text-to-Emoji Studio
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
-            Enrich Any Message with Contextual Emojis
+          <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-slate-900 uppercase tracking-tight">
+            TEXT TO <span className="text-[#FF4925]">EMOJI</span> CONVERTER
           </h1>
-          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 max-w-2xl">
+          <p className="text-xs sm:text-sm font-medium text-slate-600 mt-1 max-w-2xl">
             Preserves your original words and places meaningful, non-overlapping emojis at natural emotional beats.
           </p>
         </div>
       )}
 
       {/* Main Converter Card */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+      <div className="bg-white border-2 border-slate-200/80 rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -295,6 +296,7 @@ export const TextToEmojiView: React.FC<TextToEmojiViewProps> = ({
             </div>
           ))}
         </div>
+      </div>
       </div>
     </div>
   );

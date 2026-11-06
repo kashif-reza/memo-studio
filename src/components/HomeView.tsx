@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   Sparkles,
   Search,
@@ -12,13 +12,24 @@ import {
   Flame,
   Clock,
   Check,
+  Upload,
+  Download,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import { GIVEN_PHOTO_EMOJIS, parseCropUrl } from '../utils/photoEmojiCatalog';
 import { GivenPhotoItem } from '../types/emoji';
 import { UNICODE_EMOJI_LIBRARY, UnicodeEmojiItem } from '../utils/unicodeEmojiCatalog';
 import { PRESET_TRENDING_GIFS } from './GifCreatorStudio';
 import { TextToEmojiView } from './TextToEmojiView';
-import { FormattedEmojiText } from './FormattedEmojiText';
+import {
+  AURA_EMOTIONS,
+  AuraEmotionOrbSvg,
+  AuraEmotionSpec,
+  Emojisan3DCharacterSvg,
+  EmojisanCharacterId,
+  renderAuraEmotionToDataUrl,
+} from './AuraEmotionAvatars';
 
 export type MemoNavView =
   | 'home'
@@ -31,6 +42,10 @@ export type MemoNavView =
 interface HomeViewProps {
   onNavigate: (view: MemoNavView) => void;
   onOpenTemplateInMemeMaker: (template: GivenPhotoItem) => void;
+  customCollectionItems: GivenPhotoItem[];
+  onAddCollectionFiles: (files: FileList | File[], customTitle?: string) => void;
+  onAddCollectionUrl: (url: string, title: string) => void;
+  onDeleteCollectionItem: (id: string) => void;
   favoriteEmojis: string[];
   favoriteTemplateIds: string[];
   favoriteGifIds: string[];
@@ -45,6 +60,10 @@ interface HomeViewProps {
 export const HomeView: React.FC<HomeViewProps> = ({
   onNavigate,
   onOpenTemplateInMemeMaker,
+  customCollectionItems,
+  onAddCollectionFiles,
+  onAddCollectionUrl,
+  onDeleteCollectionItem,
   favoriteEmojis,
   favoriteTemplateIds,
   favoriteGifIds,
@@ -61,6 +80,18 @@ export const HomeView: React.FC<HomeViewProps> = ({
   >('trending-memes');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // State for Picture 1: Inside-Out Style Blurred Aura Emotion Avatars
+  const [selectedAura, setSelectedAura] = useState<AuraEmotionSpec>(AURA_EMOTIONS[4]); // Default 'Joy'
+  const [customAuraLabel, setCustomAuraLabel] = useState<string>('');
+
+  // State for Section 4: Drop New GIF & Picture Collection Hub
+  const [isDraggingCollection, setIsDraggingCollection] = useState(false);
+  const [collectionFilter, setCollectionFilter] = useState<'all' | 'gif' | 'photo'>('all');
+  const [customTitleInput, setCustomTitleInput] = useState('');
+  const [customUrlInput, setCustomUrlInput] = useState('');
+  const [showTextConverterModal, setShowTextConverterModal] = useState(false);
+  const collectionFileInputRef = useRef<HTMLInputElement | null>(null);
+
   // Instant search across Emojis, Meme Templates, and GIFs from Hero Search input
   const quickSearchResults = useMemo(() => {
     const q = heroSearch.trim().toLowerCase();
@@ -73,15 +104,18 @@ export const HomeView: React.FC<HomeViewProps> = ({
         e.char.includes(q)
     ).slice(0, 8);
 
-    const memes = GIVEN_PHOTO_EMOJIS.filter(
-      (m) =>
-        m.name.toLowerCase().includes(q) ||
-        m.defaultCaption.toLowerCase().includes(q) ||
-        m.shortcode.toLowerCase().includes(q)
-    ).slice(0, 6);
+    const allTemplates = [...customCollectionItems, ...GIVEN_PHOTO_EMOJIS];
+    const memes = allTemplates
+      .filter(
+        (m) =>
+          m.name.toLowerCase().includes(q) ||
+          m.defaultCaption.toLowerCase().includes(q) ||
+          m.shortcode.toLowerCase().includes(q)
+      )
+      .slice(0, 6);
 
     return { emojis, memes };
-  }, [heroSearch]);
+  }, [heroSearch, customCollectionItems]);
 
   const handleCopyEmoji = async (item: UnicodeEmojiItem | string) => {
     const char = typeof item === 'string' ? item : item.char;
@@ -97,76 +131,186 @@ export const HomeView: React.FC<HomeViewProps> = ({
     }
   };
 
+  // Actions for Aura Emotion Avatars (First Picture)
+  const handleUseAuraInMemeMaker = (emotion: AuraEmotionSpec) => {
+    const label = customAuraLabel.trim() || emotion.label;
+    const dataUrl = renderAuraEmotionToDataUrl(emotion, label);
+    if (!dataUrl) return;
+    const item: GivenPhotoItem = {
+      id: `aura-avatar-${emotion.id}-${Date.now()}`,
+      name: `${label} Aura Avatar`,
+      shortcode: `:aura_${emotion.id}:`,
+      category: 'user-drop',
+      vibeTag: `${label} Aura`,
+      defaultCaption: label.toUpperCase(),
+      photoUrl: dataUrl,
+      matchingConfig: {
+        ...GIVEN_PHOTO_EMOJIS[0].matchingConfig,
+        id: `aura-cfg-${emotion.id}`,
+        name: `${label} Aura Avatar`,
+        shortcode: `:aura_${emotion.id}:`,
+        photoUrl: dataUrl,
+        captionText: label.toUpperCase(),
+      },
+    };
+    onOpenTemplateInMemeMaker(item);
+    onToast(`Loaded ${label} Aura Avatar into Meme Maker!`, 'success');
+  };
+
+  const handleDownloadAuraAvatar = (emotion: AuraEmotionSpec) => {
+    const label = customAuraLabel.trim() || emotion.label;
+    const dataUrl = renderAuraEmotionToDataUrl(emotion, label);
+    if (!dataUrl) return;
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = `memo-aura-${emotion.id}.png`;
+    a.click();
+    onToast(`Downloaded ${label} Aura Avatar PNG!`, 'success');
+  };
+
   const featuredTools: Array<{
     id: MemoNavView;
-    badge: string;
+    step: string;
+    characterId: EmojisanCharacterId;
+    characterName: string;
     title: string;
+    workSummary: string;
     description: string;
     bullets: string[];
     ctaLabel: string;
-    accentColor: string;
-    icon: React.ReactNode;
+    borderColor: string;
+    cornerBg: string;
   }> = [
     {
       id: 'emoji-studio',
-      badge: 'Tool A',
+      step: '01 · Starsan',
+      characterId: 'starsan',
+      characterName: 'Starsan',
       title: 'Emoji Studio',
-      description: 'Explore categorized Unicode emojis, build combinations, or cook custom animated stickers.',
-      bullets: ['9 curated emoji categories', '1-click clipboard copy', 'Emoji combination builder'],
+      workSummary: 'Emoji Explorer & Sticker Cooker',
+      description:
+        'Explore categorized Unicode emojis, build multi-emoji combinations, or cook custom animated stickers.',
+      bullets: [
+        '9 curated emoji categories',
+        '1-click clipboard copy',
+        'Emoji combination builder',
+      ],
       ctaLabel: 'Open Emoji Studio',
-      accentColor: '#FF4925',
-      icon: <Smile className="w-5 h-5 text-[#FF4925]" />,
+      borderColor: '#B85CFF',
+      cornerBg: 'rgba(184, 92, 255, 0.12)',
     },
     {
       id: 'gif-studio',
-      badge: 'Tool B',
+      step: '02 · Ellipsan',
+      characterId: 'ellipsan',
+      characterName: 'Ellipsan',
       title: 'GIF Studio',
-      description: 'Turn multi-photo sequences, viral memes, or custom headlines into looping animated GIFs.',
-      bullets: ['Multi-image sequence to GIF', 'Animated meme effects', 'Kinetic text GIF export'],
+      workSummary: 'Animated Meme & Sequence GIF Maker',
+      description:
+        'Turn multi-photo sequences, viral memes, or custom headlines into looping animated GIF files.',
+      bullets: [
+        'Multi-image sequence to GIF',
+        'Animated meme motion effects',
+        'Kinetic text .GIF export',
+      ],
       ctaLabel: 'Open GIF Studio',
-      accentColor: '#FFBA00',
-      icon: <Film className="w-5 h-5 text-[#E97A11]" />,
+      borderColor: '#FF2A7A',
+      cornerBg: 'rgba(255, 42, 122, 0.12)',
     },
     {
       id: 'meme-maker',
-      badge: 'Tool C',
+      step: '03 · Cloudsan',
+      characterId: 'cloudsan',
+      characterName: 'Cloudsan',
       title: 'Meme Maker',
-      description: 'Upload your own photos or customize 139 viral templates with draggable Impact captions.',
-      bullets: ['Drag & drop photo upload', 'Multi-layer outlined text', 'PNG/JPG download & copy'],
+      workSummary: 'Custom Photo & Template Meme Editor',
+      description:
+        'Upload your own photos or customize 139+ viral templates with draggable Impact captions.',
+      bullets: [
+        'Drag & drop photo upload',
+        'Multi-layer outlined text',
+        'PNG/JPG download & copy',
+      ],
       ctaLabel: 'Create a Meme',
-      accentColor: '#8EBE2A',
-      icon: <ImageIcon className="w-5 h-5 text-[#8EBE2A]" />,
+      borderColor: '#2BC4F3',
+      cornerBg: 'rgba(43, 196, 243, 0.12)',
     },
     {
       id: 'text-to-emoji',
-      badge: 'Tool D',
+      step: '04 · Conesan',
+      characterId: 'conesan',
+      characterName: 'Conesan',
       title: 'Text to Emoji',
-      description: 'Automatically enrich plain sentences with contextual, non-overlapping emojis.',
-      bullets: ['4 emotional intensity modes', 'Preserves original wording', 'Zero emoji/text overlap'],
+      workSummary: 'Smart Sentence-to-Emoji Converter',
+      description:
+        'Automatically enrich plain sentences with contextual, non-overlapping emojis for any mood.',
+      bullets: [
+        '4 emotional intensity modes',
+        'Preserves original wording',
+        'Zero emoji/text overlap',
+      ],
       ctaLabel: 'Convert Text Now',
-      accentColor: '#67AEEE',
-      icon: <Wand2 className="w-5 h-5 text-[#67AEEE]" />,
+      borderColor: '#8EBE2A',
+      cornerBg: 'rgba(142, 190, 42, 0.14)',
     },
   ];
 
+  // Combine user-dropped GIF/Photo collection items with curated starter GIF/Photo items
+  const displayedCollectionItems = useMemo(() => {
+    const combined = [
+      ...customCollectionItems,
+      ...GIVEN_PHOTO_EMOJIS.slice(0, 8),
+    ];
+    if (collectionFilter === 'all') return combined;
+    return combined.filter((item) => {
+      const isGif =
+        item.photoUrl.toLowerCase().includes('.gif') ||
+        item.photoUrl.startsWith('data:image/gif') ||
+        item.vibeTag.toLowerCase().includes('gif');
+      return collectionFilter === 'gif' ? isGif : !isGif;
+    });
+  }, [customCollectionItems, collectionFilter]);
+
+  const handleCollectionDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDraggingCollection(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      onAddCollectionFiles(e.dataTransfer.files, customTitleInput.trim() || undefined);
+      setCustomTitleInput('');
+    }
+  };
+
+  const handleAddByUrlSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedUrl = customUrlInput.trim();
+    if (!trimmedUrl) {
+      onToast('Please enter a valid GIF or image URL first.', 'error');
+      return;
+    }
+    const title = customTitleInput.trim() || 'Dropped Community Media';
+    onAddCollectionUrl(trimmedUrl, title);
+    setCustomUrlInput('');
+    setCustomTitleInput('');
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12">
-      {/* 1. HERO SECTION */}
+      {/* 1. HERO SECTION WITH INSIDE-OUT STYLE ANIMATED AURA EMOTION AVATARS (First Picture) */}
       <section className="relative rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 sm:p-10 lg:p-12 shadow-sm overflow-hidden">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center">
           {/* Left Hero Copy + Search + CTAs */}
-          <div className="lg:col-span-7 space-y-6">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#FF4925]/10 text-[#FF4925] text-xs font-bold uppercase tracking-wider">
+          <div className="lg:col-span-6 space-y-6">
+            <div className="flex items-center gap-2 text-xs font-bold text-[#FF4925]">
               <Sparkles className="w-3.5 h-3.5" />
-              MEMO Creative Expression Suite
+              <span>MEMO Creative Expression Suite · Aura Avatars, Memes & GIFs</span>
             </div>
 
             <div className="space-y-3">
-              <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-[1.1]">
+              <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-[1.1] text-balance">
                 Express Yourself Beyond Words.
               </h1>
               <p className="text-base sm:text-lg text-slate-600 dark:text-slate-300 max-w-2xl leading-relaxed">
-                Create hilarious memes, expressive emojis, and animated GIFs. Customize your creativity and share it anywhere.
+                Create hilarious memes, animated aura emotion avatars, and looping GIFs. Drop your own collection and share it anywhere.
               </p>
             </div>
 
@@ -177,7 +321,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 type="text"
                 value={heroSearch}
                 onChange={(e) => setHeroSearch(e.target.value)}
-                placeholder="Search emojis, viral memes, or reactions (e.g. Hera Pheri, happy, coffee, Doge)..."
+                placeholder="Search emojis, aura moods, or viral memes (e.g. Joy, Envy, Hera Pheri)..."
                 className="w-full pl-12 pr-24 py-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/90 text-sm font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#FF4925] shadow-xs"
               />
               {heroSearch && (
@@ -261,7 +405,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <button
                 type="button"
                 onClick={() => onNavigate('meme-maker')}
-                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl text-sm font-bold bg-[#FF4925] hover:bg-[#e03d1d] text-white shadow-sm transition-all cursor-pointer"
+                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl text-sm font-bold bg-[#FF4925] hover:bg-[#e03d1d] text-white shadow-sm transition-all cursor-pointer whitespace-nowrap"
               >
                 <ImageIcon className="w-4 h-4" />
                 Create a Meme
@@ -269,7 +413,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <button
                 type="button"
                 onClick={() => onNavigate('emoji-studio')}
-                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl text-sm font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white hover:border-[#FF4925] transition-all cursor-pointer"
+                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl text-sm font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white hover:border-[#FF4925] transition-all cursor-pointer whitespace-nowrap"
               >
                 <Smile className="w-4 h-4 text-[#FF4925]" />
                 Explore Emojis
@@ -277,7 +421,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <button
                 type="button"
                 onClick={() => onNavigate('gif-studio')}
-                className="inline-flex items-center gap-2 px-5 py-3.5 rounded-2xl text-sm font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-[#FF4925] transition-all cursor-pointer"
+                className="inline-flex items-center gap-2 px-5 py-3.5 rounded-2xl text-sm font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-[#FF4925] transition-all cursor-pointer whitespace-nowrap"
               >
                 <Film className="w-4 h-4 text-[#E97A11]" />
                 Make a GIF
@@ -285,102 +429,93 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
           </div>
 
-          {/* Right Visual Showcase: Memes, GIFs, and Emojis */}
-          <div className="lg:col-span-5 grid grid-cols-2 gap-3.5">
-            {/* Showcase Card 1: Featured Viral Meme */}
-            <button
-              type="button"
-              onClick={() => onOpenTemplateInMemeMaker(GIVEN_PHOTO_EMOJIS[0])}
-              className="group relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-900 aspect-square text-left shadow-sm cursor-pointer"
-            >
-              <img
-                src={GIVEN_PHOTO_EMOJIS[0].photoUrl}
-                alt={GIVEN_PHOTO_EMOJIS[0].name}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-              />
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/90 via-slate-950/50 to-transparent p-3.5">
-                <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-[#FF4925] text-white mb-1">
-                  Meme Studio
-                </span>
-                <p className="text-xs font-extrabold text-white truncate">
-                  {GIVEN_PHOTO_EMOJIS[0].name.toUpperCase()}
+          {/* Right Visual Showcase: 3x3 Inside-Out Animated Blurred Aura Emotion Avatars (First Picture) */}
+          <div className="lg:col-span-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/90 p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div>
+                <h2 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white">
+                  Animated Aura Emotion Avatars
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Click any soft glowing emotion orb to animate, customize, download, or turn into a meme.
                 </p>
               </div>
-            </button>
-
-            {/* Showcase Card 2: Expressive Non-Overlapping Emojis */}
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 p-4 flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400">
-                  Instant Copy
-                </span>
-                <Smile className="w-4 h-4 text-slate-400" />
-              </div>
-              <div className="grid grid-cols-3 gap-2 my-2">
-                {['😂', '😍', '🥳', '🔥', '🚀', '💯'].map((char) => (
-                  <button
-                    key={char}
-                    type="button"
-                    onClick={() => handleCopyEmoji(char)}
-                    className="aspect-square rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-700 flex items-center justify-center text-2xl hover:scale-105 hover:border-[#FF4925] transition-all cursor-pointer"
-                    title={`Copy ${char}`}
-                  >
-                    <span className="memo-emoji-span">{char}</span>
-                  </button>
-                ))}
-              </div>
-              <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                1-click copy with zero text overlap
-              </p>
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                Active: <strong className="text-slate-900 dark:text-white">{selectedAura.label}</strong>
+              </span>
             </div>
 
-            {/* Showcase Card 3: Text-to-Emoji Preview */}
-            <button
-              type="button"
-              onClick={() => onNavigate('text-to-emoji')}
-              className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 p-4 flex flex-col justify-between text-left hover:border-[#FF4925] transition-colors cursor-pointer"
-            >
-              <span className="inline-block w-fit px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-sky-500/15 text-sky-600 dark:text-sky-400">
-                Text to Emoji
-              </span>
-              <p className="text-sm font-semibold text-slate-900 dark:text-white my-2">
-                <FormattedEmojiText text="Good morning 🌞☕ Hope you have a wonderful day! ✨" />
-              </p>
-              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#FF4925]">
-                Try Converter <ArrowRight className="w-3 h-3" />
-              </span>
-            </button>
+            {/* 3x3 Grid Matching Reference Picture 1 (Disgust, Ennui, Anger / Anxiety, Joy, Sadness / Fear, Envy, Embarrassing) */}
+            <div className="grid grid-cols-3 gap-2 sm:gap-3 place-items-center bg-white dark:bg-slate-950/60 rounded-2xl p-3 sm:p-4 border border-slate-100 dark:border-slate-800/80">
+              {AURA_EMOTIONS.map((emotion) => {
+                const isSelected = selectedAura.id === emotion.id;
+                return (
+                  <button
+                    key={emotion.id}
+                    type="button"
+                    onClick={() => setSelectedAura(emotion)}
+                    className={`group relative rounded-2xl p-1 sm:p-1.5 transition-all cursor-pointer flex flex-col items-center justify-center ${
+                      isSelected
+                        ? 'ring-2 ring-slate-900 dark:ring-white bg-slate-50/80 dark:bg-slate-900 scale-105'
+                        : 'hover:bg-slate-50/60 dark:hover:bg-slate-900/40'
+                    }`}
+                    title={`${emotion.label} — ${emotion.tagline}`}
+                  >
+                    <div className={emotion.motionClass}>
+                      <AuraEmotionOrbSvg
+                        emotion={emotion}
+                        size={108}
+                        animated
+                        customLabel={
+                          isSelected && customAuraLabel.trim()
+                            ? customAuraLabel.trim()
+                            : emotion.label
+                        }
+                      />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
 
-            {/* Showcase Card 4: Animated Meme GIF */}
-            <button
-              type="button"
-              onClick={() => onNavigate('gif-studio')}
-              className="group relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-900 aspect-square text-left shadow-sm cursor-pointer"
-            >
-              <img
-                src={GIVEN_PHOTO_EMOJIS[1].photoUrl}
-                alt={GIVEN_PHOTO_EMOJIS[1].name}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            {/* Interactive Controls Bar for Selected Aura Emotion Avatar */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1">
+              <input
+                type="text"
+                value={customAuraLabel}
+                onChange={(e) => setCustomAuraLabel(e.target.value)}
+                placeholder={`Custom label for ${selectedAura.label} (optional)...`}
+                aria-label="Custom Aura Avatar Label"
+                className="flex-1 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#FF4925]"
               />
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/90 via-slate-950/50 to-transparent p-3.5">
-                <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-500 text-slate-950 mb-1">
-                  Animated .GIF
-                </span>
-                <p className="text-xs font-extrabold text-white truncate">
-                  {GIVEN_PHOTO_EMOJIS[1].name.toUpperCase()}
-                </p>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleUseAuraInMemeMaker(selectedAura)}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#FF4925] dark:hover:bg-[#FF4925] dark:hover:text-white transition-colors cursor-pointer whitespace-nowrap"
+                >
+                  Use as Meme Avatar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadAuraAvatar(selectedAura)}
+                  className="px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:border-[#FF4925] inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  PNG
+                </button>
               </div>
-            </button>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* 2. FEATURED CREATION TOOLS SECTION (4 Cards) */}
-      <section className="space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
+      {/* 2. FEATURED CREATION TOOLS SECTION (Previous 4-Card Setup with Themed Border Lines & Corner Little Avatars) */}
+      <section className="rounded-3xl border-2 border-[#E8B1C4] dark:border-slate-800 bg-white dark:bg-slate-900 p-6 sm:p-8 shadow-sm space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-4">
           <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-[#FF4925]">
-              4 Specialized Studios
+            <span className="text-xs font-bold text-[#FF004C]">
+              4 Specialized Studios · What Each Section Does
             </span>
             <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
               Featured Creation Tools
@@ -395,36 +530,57 @@ export const HomeView: React.FC<HomeViewProps> = ({
           {featuredTools.map((tool) => (
             <div
               key={tool.id}
-              className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm hover:border-[#FF4925] transition-all flex flex-col justify-between gap-5"
+              style={{ borderColor: tool.borderColor }}
+              className="group relative rounded-2xl border-2 bg-white dark:bg-slate-900 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between gap-5 overflow-hidden"
             >
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                    {tool.icon}
+              <div className="space-y-3.5">
+                {/* Top Header Row: Clear Work Step Label + Little Avatar in the Corner */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1 pt-0.5">
+                    <span
+                      style={{ color: tool.borderColor }}
+                      className="text-xs font-extrabold tracking-tight block"
+                    >
+                      {tool.step}
+                    </span>
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white leading-snug">
+                      {tool.title}
+                    </h3>
+                    <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                      {tool.workSummary}
+                    </p>
                   </div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                    {tool.badge}
-                  </span>
+
+                  {/* Corner Little Avatar Badge */}
+                  <div
+                    style={{
+                      backgroundColor: tool.cornerBg,
+                      borderColor: tool.borderColor,
+                    }}
+                    className="w-13 h-13 rounded-2xl border flex items-center justify-center shrink-0 transition-transform group-hover:scale-105"
+                    title={`${tool.characterName} — ${tool.title}`}
+                  >
+                    <Emojisan3DCharacterSvg characterId={tool.characterId} size={42} />
+                  </div>
                 </div>
 
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">{tool.title}</h3>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
-                    {tool.description}
-                  </p>
-                </div>
+                {/* Clear Description of What Work Is Done Here */}
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  {tool.description}
+                </p>
 
-                <ul className="space-y-1.5 pt-1">
+                {/* Structured Work Capabilities List */}
+                <ul className="space-y-1.5 pt-1 border-t border-slate-100 dark:border-slate-800/80">
                   {tool.bullets.map((b) => (
                     <li
                       key={b}
-                      className="text-xs text-slate-600 dark:text-slate-300 flex items-center gap-2"
+                      className="text-xs text-slate-700 dark:text-slate-300 flex items-center gap-2"
                     >
                       <span
-                        className="w-1.5 h-1.5 rounded-full shrink-0"
-                        style={{ backgroundColor: tool.accentColor }}
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: tool.borderColor }}
                       />
-                      {b}
+                      <span>{b}</span>
                     </li>
                   ))}
                 </ul>
@@ -433,9 +589,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <button
                 type="button"
                 onClick={() => onNavigate(tool.id)}
-                className="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-slate-900 dark:bg-slate-800 text-white hover:bg-[#FF4925] dark:hover:bg-[#FF4925] transition-colors inline-flex items-center justify-center gap-1.5 cursor-pointer"
+                style={{ borderColor: tool.borderColor }}
+                className="w-full py-2.5 px-4 rounded-xl text-xs font-bold border-2 bg-slate-900 dark:bg-slate-800 text-white hover:bg-[#FF004C] dark:hover:bg-[#FF004C] transition-colors inline-flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
               >
-                {tool.ctaLabel}
+                <span>{tool.ctaLabel}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -447,9 +604,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
       <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
           <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-[#FF4925]">
-              Community Library
-            </span>
+            <span className="text-xs font-bold text-[#FF4925]">Community Library</span>
             <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">
               Popular Emojis, GIFs & Viral Meme Templates
             </h2>
@@ -459,7 +614,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <button
               type="button"
               onClick={() => setPopularTab('trending-memes')}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer whitespace-nowrap ${
                 popularTab === 'trending-memes'
                   ? 'bg-[#FF4925] text-white'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
@@ -471,7 +626,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <button
               type="button"
               onClick={() => setPopularTab('trending-emojis')}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer whitespace-nowrap ${
                 popularTab === 'trending-emojis'
                   ? 'bg-[#FF4925] text-white'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
@@ -483,7 +638,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <button
               type="button"
               onClick={() => setPopularTab('popular-gifs')}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer whitespace-nowrap ${
                 popularTab === 'popular-gifs'
                   ? 'bg-[#FF4925] text-white'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
@@ -495,7 +650,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <button
               type="button"
               onClick={() => setPopularTab('recent')}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer whitespace-nowrap ${
                 popularTab === 'recent'
                   ? 'bg-[#FF4925] text-white'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
@@ -507,7 +662,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <button
               type="button"
               onClick={() => setPopularTab('favorites')}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer whitespace-nowrap ${
                 popularTab === 'favorites'
                   ? 'bg-[#FF4925] text-white'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
@@ -523,7 +678,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         {popularTab === 'trending-memes' && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
-              {GIVEN_PHOTO_EMOJIS.slice(0, 18).map((tpl) => {
+              {[...customCollectionItems, ...GIVEN_PHOTO_EMOJIS].slice(0, 18).map((tpl) => {
                 const parsed = parseCropUrl(tpl.photoUrl);
                 const isFav = favoriteTemplateIds.includes(tpl.id);
                 return (
@@ -578,7 +733,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 onClick={() => onNavigate('meme-maker')}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-[#FF4925] hover:text-white transition-colors cursor-pointer"
               >
-                Explore All 139 Meme Templates <ArrowRight className="w-4 h-4" />
+                Explore All {139 + customCollectionItems.length} Meme Templates{' '}
+                <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -647,8 +803,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 >
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-[#FF4925]/10 text-[#FF4925]">
-                        {gif.animationStyle} GIF
+                      <span className="text-[11px] font-bold text-[#FF4925]">
+                        {gif.animationStyle.toUpperCase()} GIF
                       </span>
                       <button
                         type="button"
@@ -743,27 +899,254 @@ export const HomeView: React.FC<HomeViewProps> = ({
         )}
       </section>
 
-      {/* 4. EMBEDDED INTELLIGENT TEXT-TO-EMOJI CONVERTER & READABILITY STUDIO */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
+      {/* 4. DROP NEW COLLECTION OF GIF IMAGES & PICTURES FOR ALL USERS (Section 4) */}
+      <section className="space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
           <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-[#FF4925]">
-              Instant Message Enhancer
+            <span className="text-xs font-bold text-[#FF4925]">
+              Community Drop Box · GIFs & Pictures
             </span>
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
-              Text to Emoji & Readability Studio
+            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
+              Drop Your New Collection of GIFs & Pictures
             </h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              Upload or drop GIF animations and pictures here so everyone can use them across Meme Maker, GIF Studio, and Emoji Studio.
+            </p>
           </div>
+
           <button
             type="button"
-            onClick={() => onNavigate('text-to-emoji')}
-            className="text-xs font-bold text-[#FF4925] hover:underline inline-flex items-center gap-1 cursor-pointer"
+            onClick={() => setShowTextConverterModal((v) => !v)}
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-800 dark:text-slate-200 hover:border-[#FF4925] cursor-pointer self-start sm:self-auto whitespace-nowrap"
           >
-            Open Full Converter <ArrowRight className="w-3.5 h-3.5" />
+            <Wand2 className="w-3.5 h-3.5 text-[#FF4925]" />
+            {showTextConverterModal ? 'Hide Text-to-Emoji Tool' : 'Quick Text-to-Emoji Tool'}
           </button>
         </div>
 
-        <TextToEmojiView embedded onToast={onToast} />
+        {/* Two-Column Split: Left Drop Zone & Uploader + Right Shared Collection Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Sub-Card 1: Interactive Drag-and-Drop GIF & Picture Uploader */}
+          <div className="lg:col-span-5 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm space-y-5">
+            <div className="space-y-1">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                Add to Public Collection
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Supports animated <code className="font-mono">.GIF</code>, <code className="font-mono">.PNG</code>, <code className="font-mono">.JPG</code>, and <code className="font-mono">.WEBP</code> files.
+              </p>
+            </div>
+
+            {/* Optional Custom Title Before Dropping */}
+            <div>
+              <label
+                htmlFor="collection-item-title"
+                className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5"
+              >
+                Collection Title / Caption (Optional)
+              </label>
+              <input
+                id="collection-item-title"
+                type="text"
+                value={customTitleInput}
+                onChange={(e) => setCustomTitleInput(e.target.value)}
+                placeholder="e.g. Dancing Cat GIF, Vibe Check Reaction..."
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#FF4925]"
+              />
+            </div>
+
+            {/* Drag and Drop Area */}
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDraggingCollection(true);
+              }}
+              onDragLeave={() => setIsDraggingCollection(false)}
+              onDrop={handleCollectionDrop}
+              onClick={() => collectionFileInputRef.current?.click()}
+              className={`rounded-2xl border-2 border-dashed p-7 text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-3 ${
+                isDraggingCollection
+                  ? 'border-[#FF4925] bg-[#FF4925]/10'
+                  : 'border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 hover:border-[#FF4925]'
+              }`}
+            >
+              <input
+                ref={collectionFileInputRef}
+                type="file"
+                accept="image/gif,image/png,image/jpeg,image/webp"
+                multiple
+                onChange={(e) => {
+                  if (e.target.files && e.target.files.length > 0) {
+                    onAddCollectionFiles(e.target.files, customTitleInput.trim() || undefined);
+                    setCustomTitleInput('');
+                    e.target.value = '';
+                  }
+                }}
+                className="hidden"
+              />
+              <div className="w-12 h-12 rounded-2xl bg-[#FF4925]/15 text-[#FF4925] flex items-center justify-center">
+                <Upload className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-bold text-slate-900 dark:text-white">
+                  Drop GIF images & pictures here
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  or click to browse multiple files from your device
+                </p>
+              </div>
+              <span className="mt-1 px-4 py-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold">
+                Select GIFs / Pictures
+              </span>
+            </div>
+
+            {/* Or Paste Direct GIF / Image URL */}
+            <form onSubmit={handleAddByUrlSubmit} className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <label
+                htmlFor="collection-url-input"
+                className="block text-xs font-bold text-slate-700 dark:text-slate-300"
+              >
+                Or Add by Direct GIF / Image Link
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="collection-url-input"
+                  type="url"
+                  value={customUrlInput}
+                  onChange={(e) => setCustomUrlInput(e.target.value)}
+                  placeholder="https://example.com/funny-reaction.gif"
+                  className="flex-1 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#FF4925]"
+                />
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-[#FF4925] hover:bg-[#e03d1d] text-white text-xs font-bold inline-flex items-center gap-1 cursor-pointer shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Sub-Card 2: Live User-Usable GIF & Picture Collection Gallery */}
+          <div className="lg:col-span-7 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                  Ready-to-Use GIF & Picture Collection ({displayedCollectionItems.length})
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Click any dropped GIF or picture to customize in Meme Maker or animate in GIF Studio.
+                </p>
+              </div>
+
+              {/* Filter Tabs */}
+              <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800">
+                {(['all', 'gif', 'photo'] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setCollectionFilter(tab)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold capitalize transition-colors cursor-pointer ${
+                      collectionFilter === tab
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
+                        : 'text-slate-600 dark:text-slate-400'
+                    }`}
+                  >
+                    {tab === 'all' ? 'All Media' : tab === 'gif' ? 'GIFs' : 'Pictures'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {displayedCollectionItems.length === 0 ? (
+              <div className="py-12 text-center space-y-2">
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  No items in this filter yet.
+                </p>
+                <p className="text-xs text-slate-500">
+                  Drop a GIF or picture on the left panel to add it immediately!
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5">
+                {displayedCollectionItems.slice(0, 12).map((item) => {
+                  const parsed = parseCropUrl(item.photoUrl);
+                  const isCustom = item.id.startsWith('dropped-');
+                  const isGif =
+                    item.photoUrl.toLowerCase().includes('.gif') ||
+                    item.photoUrl.startsWith('data:image/gif');
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="group rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex flex-col justify-between hover:border-[#FF4925] transition-all"
+                    >
+                      <div className="aspect-square bg-slate-900 relative overflow-hidden">
+                        <img
+                          src={parsed.baseUrl}
+                          alt={item.name}
+                          loading="lazy"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                        />
+                        <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-950/75 text-white">
+                          {isGif ? 'GIF' : isCustom ? 'NEW DROP' : 'PHOTO'}
+                        </span>
+
+                        {isCustom && (
+                          <button
+                            type="button"
+                            onClick={() => onDeleteCollectionItem(item.id)}
+                            aria-label={`Remove ${item.name}`}
+                            className="absolute top-2 right-2 p-1.5 rounded-lg bg-rose-600/90 text-white hover:bg-rose-600 transition-colors cursor-pointer"
+                            title="Remove from Collection"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="p-2.5 space-y-2">
+                        <div>
+                          <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                            {item.name}
+                          </p>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                            {item.defaultCaption}
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => onOpenTemplateInMemeMaker(item)}
+                            className="py-1.5 px-2 rounded-lg text-[10px] font-bold bg-slate-900 dark:bg-slate-700 text-white hover:bg-[#FF4925] transition-colors cursor-pointer truncate"
+                          >
+                            Use Meme
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onNavigate('gif-studio')}
+                            className="py-1.5 px-2 rounded-lg text-[10px] font-bold border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:border-[#FF4925] transition-colors cursor-pointer truncate"
+                          >
+                            Make GIF
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Optional Expandable Text-to-Emoji Drawer */}
+        {showTextConverterModal && (
+          <div className="pt-4">
+            <TextToEmojiView embedded onToast={onToast} />
+          </div>
+        )}
       </section>
     </div>
   );

@@ -19,7 +19,7 @@ import {
   MOTION_PRESETS,
   MOUTH_STYLES,
 } from '../utils/emojiEngine';
-import { getCropImgProps } from '../utils/photoEmojiCatalog';
+import { getCropImgProps, serializeSvgWithInlinedImages } from '../utils/photoEmojiCatalog';
 import { EmojiRenderer } from './EmojiRenderer';
 
 export const BRAND_COLOR_SWATCHES = [
@@ -70,6 +70,7 @@ interface MinimalistCreatorStudioProps {
   onOpenExport: () => void;
   onOpenChatSim: () => void;
   onAddPhotos?: (files: FileList | File[]) => void;
+  onToast?: (message: string, type?: 'success' | 'info' | 'error') => void;
 }
 
 type StudioStepTab = 'photo' | 'motion' | 'face' | 'saved';
@@ -84,6 +85,11 @@ const QUICK_CAPTIONS = [
   'HOLD UP',
   'BIG BRAIN',
   'YUMMY',
+];
+
+const QUICK_COPY_EMOJIS = [
+  '😂', '😍', '🔥', '❤️', '🥳', '😎', '😭', '🙏', '✨',
+  '💯', '🌞', '☕', '🎉', '🥰', '🚀', '💀', '👑', '🤝',
 ];
 
 export const MinimalistCreatorStudio: React.FC<MinimalistCreatorStudioProps> = ({
@@ -108,12 +114,71 @@ export const MinimalistCreatorStudio: React.FC<MinimalistCreatorStudioProps> = (
   onOpenExport,
   onOpenChatSim,
   onAddPhotos,
+  onToast,
 }) => {
   const [activeStep, setActiveStep] = useState<StudioStepTab>('photo');
   const [moodFilter, setMoodFilter] = useState<
     MoodVibeId | 'meme-pack' | 'split-sheet'
   >('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [copyStageFeedback, setCopyStageFeedback] = useState<boolean>(false);
+  const [copiedUnicodeChar, setCopiedUnicodeChar] = useState<string | null>(null);
+  const stageSvgRef = React.useRef<SVGSVGElement | null>(null);
+
+  const handleCopyStageEmoji = async () => {
+    try {
+      const svgEl = stageSvgRef.current;
+      if (svgEl && navigator.clipboard && 'write' in navigator.clipboard && typeof ClipboardItem !== 'undefined') {
+        const svgString = await serializeSvgWithInlinedImages(svgEl);
+        const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(svgBlob);
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        await new Promise<void>((resolve) => {
+          const img = new Image();
+          img.onload = async () => {
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, 512, 512);
+              canvas.toBlob(async (pngBlob) => {
+                if (pngBlob) {
+                  try {
+                    await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
+                  } catch {
+                    await navigator.clipboard.writeText(config.shortcode);
+                  }
+                }
+                resolve();
+              }, 'image/png');
+            } else {
+              resolve();
+            }
+            URL.revokeObjectURL(url);
+          };
+          img.onerror = () => {
+            URL.revokeObjectURL(url);
+            resolve();
+          };
+          img.src = url;
+        });
+      } else {
+        await navigator.clipboard?.writeText(config.shortcode);
+      }
+    } catch {
+      navigator.clipboard?.writeText(config.shortcode);
+    }
+    setCopyStageFeedback(true);
+    setTimeout(() => setCopyStageFeedback(false), 1800);
+    onToast?.(`Copied ${config.name} (${config.shortcode}) to clipboard!`, 'success');
+  };
+
+  const handleCopyUnicodeChar = (char: string) => {
+    navigator.clipboard?.writeText(char);
+    setCopiedUnicodeChar(char);
+    setTimeout(() => setCopiedUnicodeChar(null), 1500);
+    onToast?.(`Copied ${char} to clipboard!`, 'success');
+  };
 
   const activeMixMode: PhotoMixMode =
     config.photoMixMode || (config.photoUrl ? 'cutout-solo' : 'none');
@@ -231,6 +296,7 @@ export const MinimalistCreatorStudio: React.FC<MinimalistCreatorStudioProps> = (
               }}
             >
               <EmojiRenderer
+                ref={stageSvgRef}
                 config={config}
                 size={195}
                 animate={isPlaying}
@@ -368,12 +434,30 @@ export const MinimalistCreatorStudio: React.FC<MinimalistCreatorStudioProps> = (
               )}
             </div>
 
-            {/* Bottom Action Row: Chat Test + Export */}
-            <div className="w-full grid grid-cols-2 gap-3 pt-1">
+            {/* Bottom Action Row: Copy Emoji + Chat Test + Export */}
+            <div className="w-full grid grid-cols-3 gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={handleCopyStageEmoji}
+                className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-[#FFBA00] hover:bg-[#E97A11] text-slate-950 hover:text-white text-xs font-bold transition-colors cursor-pointer whitespace-nowrap"
+              >
+                {copyStageFeedback ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    <span>Copy Emoji</span>
+                  </>
+                )}
+              </button>
+
               <button
                 type="button"
                 onClick={onOpenChatSim}
-                className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#67AEEE]/15 hover:bg-[#67AEEE]/25 border border-[#67AEEE]/40 text-xs font-bold text-slate-900 transition-colors cursor-pointer whitespace-nowrap"
+                className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-[#67AEEE]/15 hover:bg-[#67AEEE]/25 border border-[#67AEEE]/40 text-xs font-bold text-slate-900 transition-colors cursor-pointer whitespace-nowrap"
               >
                 <MessageSquare className="w-4 h-4 text-[#67AEEE]" />
                 <span>Test in Chat</span>
@@ -382,7 +466,7 @@ export const MinimalistCreatorStudio: React.FC<MinimalistCreatorStudioProps> = (
               <button
                 type="button"
                 onClick={onOpenExport}
-                className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#FF004C] hover:bg-[#FF4925] text-white text-xs font-bold transition-colors cursor-pointer whitespace-nowrap"
+                className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-[#FF004C] hover:bg-[#FF4925] text-white text-xs font-bold transition-colors cursor-pointer whitespace-nowrap"
               >
                 <Download className="w-4 h-4" />
                 <span>Export Emoji</span>
@@ -429,20 +513,55 @@ export const MinimalistCreatorStudio: React.FC<MinimalistCreatorStudioProps> = (
               })}
             </div>
 
-            {/* TAB 1: BUILT-IN EMOJI LIBRARY & MIX (No Upload/Drop UI) */}
+            {/* TAB 1: BUILT-IN EMOJI LIBRARY & MIX */}
             {activeStep === 'photo' && (
               <div className="space-y-4">
+                {/* Quick Unicode Emoji Selection & 1-Click Copy Strip */}
+                <div className="p-3 rounded-xl bg-[#F9F9F9] border border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
+                    <span>Quick Unicode Emojis (Click to Copy or Add to Caption)</span>
+                    {copiedUnicodeChar && (
+                      <span className="text-[#8EBE2A] font-extrabold">
+                        Copied {copiedUnicodeChar} to Clipboard!
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {QUICK_COPY_EMOJIS.map((char) => (
+                      <button
+                        key={char}
+                        type="button"
+                        onClick={() => {
+                          handleCopyUnicodeChar(char);
+                          onUpdateConfig((prev) => ({
+                            ...prev,
+                            captionText: `${(prev.captionText || '').slice(0, 12)} ${char}`.trim(),
+                          }));
+                        }}
+                        className={`w-8 h-8 rounded-lg border flex items-center justify-center text-base transition-all cursor-pointer ${
+                          copiedUnicodeChar === char
+                            ? 'bg-[#8EBE2A]/20 border-[#8EBE2A] scale-105'
+                            : 'bg-white border-slate-200 hover:border-[#FF4925]'
+                        }`}
+                        title={`Copy ${char} & add to caption`}
+                      >
+                        <span className="memo-emoji-span">{char}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Category Filter & Search Row */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                   <div className="flex flex-wrap items-center gap-1.5">
                     {(
                       [
                         { id: 'all', label: `All (${allPhotoEmojis.length})` },
-                        { id: 'meme-pack', label: '🔥 Memes (54)' },
-                        { id: 'split-sheet', label: '✂️ Stickers (69)' },
-                        { id: 'crying', label: '😭 Crying' },
-                        { id: 'rizz', label: '😎 Rizz' },
-                        { id: 'foodie', label: '🍓 Michis' },
+                        { id: 'meme-pack', label: 'Memes (54)' },
+                        { id: 'split-sheet', label: 'Stickers (69)' },
+                        { id: 'crying', label: 'Crying' },
+                        { id: 'rizz', label: 'Rizz' },
+                        { id: 'foodie', label: 'Michis' },
                       ] as const
                     ).map((m) => (
                       <button

@@ -368,7 +368,7 @@ export default function App() {
     showToast(`Mixed stage with ${item.name}!`, 'success');
   };
 
-  const handleAddUserPhotos = (files: FileList | File[]) => {
+  const handleAddUserPhotos = (files: FileList | File[], customTitle?: string) => {
     const list = Array.from(files).filter((f) => f.type.startsWith('image/'));
     if (list.length === 0) return;
 
@@ -376,12 +376,20 @@ export default function App() {
       const reader = new FileReader();
       reader.onload = () => {
         if (typeof reader.result === 'string') {
-          const item = createDroppedPhotoEmoji(
+          const isGif = file.type === 'image/gif' || file.name.toLowerCase().endsWith('.gif');
+          const baseItem = createDroppedPhotoEmoji(
             reader.result,
-            file.name,
+            customTitle ? `${customTitle}${list.length > 1 ? ` #${idx + 1}` : ''}` : file.name,
             selectedMood === 'all' ? 'rizz' : selectedMood,
             idx + 1
           );
+          const item: GivenPhotoItem = {
+            ...baseItem,
+            vibeTag: isGif ? 'GIF Drop' : baseItem.vibeTag,
+            defaultCaption: customTitle
+              ? customTitle.toUpperCase().slice(0, 18)
+              : baseItem.defaultCaption,
+          };
           setCustomPhotos((prev) => [item, ...prev]);
           if (idx === 0) {
             setHistory((prev) => pushHistoryState(prev, item.matchingConfig));
@@ -390,7 +398,25 @@ export default function App() {
       };
       reader.readAsDataURL(file);
     });
-    showToast(`Added ${list.length} custom photo(s) to sticker studio!`, 'success');
+    showToast(`Added ${list.length} item(s) to the shared GIF & Picture collection!`, 'success');
+  };
+
+  const handleAddCollectionUrl = (url: string, title: string) => {
+    const isGif = url.toLowerCase().includes('.gif') || url.startsWith('data:image/gif');
+    const baseItem = createDroppedPhotoEmoji(url, title, 'rizz', 1);
+    const item: GivenPhotoItem = {
+      ...baseItem,
+      name: title,
+      vibeTag: isGif ? 'GIF Drop' : 'Photo Drop',
+      defaultCaption: title.toUpperCase().slice(0, 18),
+    };
+    setCustomPhotos((prev) => [item, ...prev]);
+    showToast(`Added "${title}" to the shared GIF & Picture collection!`, 'success');
+  };
+
+  const handleDeleteCollectionItem = (id: string) => {
+    setCustomPhotos((prev) => prev.filter((item) => item.id !== id));
+    showToast('Removed item from collection.', 'info');
   };
 
   const handleShortcodeInput = (val: string) => {
@@ -652,6 +678,10 @@ export default function App() {
           <HomeView
             onNavigate={setActiveView}
             onOpenTemplateInMemeMaker={handleOpenTemplateInMemeMaker}
+            customCollectionItems={customPhotos}
+            onAddCollectionFiles={handleAddUserPhotos}
+            onAddCollectionUrl={handleAddCollectionUrl}
+            onDeleteCollectionItem={handleDeleteCollectionItem}
             favoriteEmojis={favoriteEmojis}
             favoriteTemplateIds={favoriteTemplateIds}
             favoriteGifIds={favoriteGifIds}

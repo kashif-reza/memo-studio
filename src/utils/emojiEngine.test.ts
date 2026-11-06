@@ -220,3 +220,31 @@ test('encodeGif89a produces valid binary GIF89a header, Netscape loop block, and
   assert.ok(gifBytes.length > 800);
 });
 
+test('AURA_EMOTIONS and DEFAULT_EMOJISAN_CHARACTERS match reference specifications', async () => {
+  const { AURA_EMOTIONS, DEFAULT_EMOJISAN_CHARACTERS } = await import(
+    '../components/AuraEmotionAvatars'
+  );
+  assert.equal(AURA_EMOTIONS.length, 9);
+  assert.deepEqual(
+    AURA_EMOTIONS.map((a) => a.label),
+    [
+      'Disgust',
+      'Ennui',
+      'Anger',
+      'Anxiety',
+      'Joy',
+      'Sadness',
+      'Fear',
+      'Envy',
+      'Embarrassing',
+    ]
+  );
+
+  assert.equal(DEFAULT_EMOJISAN_CHARACTERS.length, 4);
+  assert.deepEqual(
+    DEFAULT_EMOJISAN_CHARACTERS.map((c) => c.name),
+    ['Starsan', 'Ellipsan', 'Cloudsan', 'Conesan']
+  );
+});
+
+

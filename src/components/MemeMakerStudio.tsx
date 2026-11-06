@@ -478,18 +478,19 @@ export const MemeMakerStudio: React.FC<MemeMakerStudioProps> = ({
   }, [templateSearch, templateFilter, favoriteTemplateIds]);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="w-full min-h-screen bg-[#F9F9F9] text-slate-900">
+      <div className="max-w-[1280px] mx-auto px-4 sm:px-8 py-6 space-y-8">
       {/* Studio Header Bar */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white border-2 border-slate-200/80 rounded-2xl p-5 shadow-sm">
         <div>
-          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#FF4925] mb-1">
+          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#FF004C] mb-1">
             <Sparkles className="w-3.5 h-3.5" />
-            MEMO Meme Maker Studio
+            MEMO Meme Creator Studio
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
-            Create & Customize Viral Memes
+          <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-slate-900 uppercase tracking-tight">
+            MEME <span className="text-[#FF4925]">CREATOR</span> STUDIO
           </h1>
-          <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
+          <p className="text-xs sm:text-sm font-medium text-slate-600 mt-0.5">
             Upload your own photo or pick from 139 viral templates. Drag text layers directly on the canvas.
           </p>
         </div>
@@ -1082,6 +1083,7 @@ export const MemeMakerStudio: React.FC<MemeMakerStudioProps> = ({
             );
           })}
         </div>
+      </div>
       </div>
     </div>
   );

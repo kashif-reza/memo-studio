@@ -1231,24 +1231,30 @@ export const EmojiRenderer = forwardRef<SVGSVGElement, EmojiRendererProps>(
           {/* Secondary-Motion Headgear & Accessories */}
           <g transform={gearTransformStr}>{renderAccessory()}</g>
 
-          {/* Optional Meme Sticker Caption Overlay — positioned below mouth & hidden on small inline sizes to prevent overlap */}
-          {config.captionText && size >= 88 && (
-            <g transform="translate(100, 178)">
+          {/* Optional Meme Sticker Caption Overlay — clean pill backdrop below mouth to prevent stroke bleed or emoji overlap */}
+          {config.captionText && size >= 96 && (
+            <g transform="translate(100, 179)">
+              <rect
+                x="-76"
+                y="-13"
+                width="152"
+                height="20"
+                rx="10"
+                fill="#0F172A"
+                fillOpacity="0.86"
+                stroke="#FFFFFF"
+                strokeOpacity="0.45"
+                strokeWidth="1.2"
+              />
               <text
                 x="0"
-                y="0"
+                y="1"
                 textAnchor="middle"
-                fontFamily="var(--font-display), sans-serif"
+                fontFamily="var(--font-display), 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif"
                 fontWeight="800"
-                fontSize={Math.max(10, Math.min(15, Math.floor(185 / Math.max(8, config.captionText.length))))}
-                textLength={config.captionText.length > 16 ? 174 : undefined}
-                lengthAdjust={config.captionText.length > 16 ? 'spacingAndGlyphs' : undefined}
-                letterSpacing="0.03em"
+                fontSize={Math.max(9.5, Math.min(12.5, Math.floor(155 / Math.max(8, config.captionText.length))))}
+                letterSpacing="0.04em"
                 fill="#FFFFFF"
-                stroke="#0F172A"
-                strokeWidth="4.5"
-                strokeLinejoin="round"
-                style={{ paintOrder: 'stroke fill' }}
               >
                 {config.captionText}
               </text>

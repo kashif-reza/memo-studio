@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { ChatMessage, EmojiConfig, SavedEmoji } from '../types/emoji';
 import { EmojiRenderer } from './EmojiRenderer';
-import { X, Send, SmilePlus } from 'lucide-react';
+import { FormattedEmojiText } from './FormattedEmojiText';
+import { X, Send, SmilePlus, Copy, Check } from 'lucide-react';
 
 interface ChatSimulatorModalProps {
   isOpen: boolean;
@@ -16,7 +17,7 @@ const INITIAL_MESSAGES: ChatMessage[] = [
     author: 'Maya Lin',
     role: 'Design Systems Lead',
     timestamp: '10:42 AM',
-    text: 'Just pushed the new animated custom emoji pack for our release channel! Test your reactions below:',
+    text: 'Hello 😊 How are you? ❤️🔥 Just pushed the new animated custom emoji pack for our release channel! 😍✨🎉',
     customEmojiIds: [],
     reactions: [
       { emojiId: 'preset-hype-cat', shortcode: ':neko_hype:', count: 4, userReacted: true },
@@ -28,13 +29,15 @@ const INITIAL_MESSAGES: ChatMessage[] = [
     author: 'Devon Brooks',
     role: 'Staff Frontend Engineer',
     timestamp: '10:44 AM',
-    text: 'The secondary bounce on the party hat and sunglasses looks super crisp at both 28px inline and 64px jumbo!',
+    text: '😂😂😂 That was hilarious! The secondary bounce on the party hat and sunglasses looks super crisp at both 28px inline and 64px jumbo! 🚀💯',
     customEmojiIds: ['preset-deal-boss'],
     reactions: [
       { emojiId: 'preset-royal-chef', shortcode: ':let_him_cook:', count: 3, userReacted: true },
     ],
   },
 ];
+
+const QUICK_UNICODE_EMOJIS = ['😊', '😂', '❤️', '🔥', '😍', '✨', '🎉', '🌞', '☕', '🥰', '💯', '🚀'];
 
 export const ChatSimulatorModal: React.FC<ChatSimulatorModalProps> = ({
   isOpen,
@@ -44,6 +47,7 @@ export const ChatSimulatorModal: React.FC<ChatSimulatorModalProps> = ({
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
   const [draftText, setDraftText] = useState<string>('');
+  const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
   const [selectedEmojisForDraft, setSelectedEmojisForDraft] = useState<string[]>([
     currentConfig.id,
   ]);
@@ -124,6 +128,12 @@ export const ChatSimulatorModal: React.FC<ChatSimulatorModalProps> = ({
     );
   };
 
+  const handleCopyMessageText = (msgId: string, text: string) => {
+    navigator.clipboard?.writeText(text);
+    setCopiedMsgId(msgId);
+    setTimeout(() => setCopiedMsgId(null), 1600);
+  };
+
   return (
     <div
       role="dialog"
@@ -131,54 +141,76 @@ export const ChatSimulatorModal: React.FC<ChatSimulatorModalProps> = ({
       aria-labelledby="chat-sim-title"
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-xs p-4"
     >
-      <div className="w-full max-w-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[88vh]">
+      <div className="w-full max-w-3xl bg-white border-2 border-slate-200 rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[88vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex items-center justify-between px-6 py-4 bg-[#E8B1C4]/35 border-b border-slate-200">
           <div>
             <h2
               id="chat-sim-title"
-              className="text-lg font-bold text-slate-900 dark:text-slate-100"
+              className="text-lg font-bold text-slate-900"
             >
               Live Team Chat & Reaction Sandbox
             </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Preview how your custom animated emojis render in #design-ship-room at real chat scale.
+            <p className="text-xs text-slate-600">
+              Preview how your custom animated emojis and inline Unicode emojis render at real chat scale without overlapping.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close Chat Sandbox"
-            className="p-2 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Messages Stream */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-slate-50/50 dark:bg-slate-950/60">
+        <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-[#F9F9F9]">
           {messages.map((msg) => (
             <div
               key={msg.id}
-              className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3"
+              className="p-4 rounded-xl bg-white border border-slate-200 space-y-3 shadow-2xs"
             >
               <div className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold text-slate-900 dark:text-slate-100">
+                  <span className="font-bold text-slate-900">
                     {msg.author}
                   </span>
                   <span aria-hidden="true" className="text-slate-400">
                     ·
                   </span>
-                  <span className="text-slate-500 dark:text-slate-400">{msg.role}</span>
+                  <span className="text-slate-500">{msg.role}</span>
                 </div>
-                <span className="font-mono text-slate-400 tabular-nums">{msg.timestamp}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-slate-400 tabular-nums">{msg.timestamp}</span>
+                  {msg.text && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopyMessageText(msg.id, msg.text)}
+                      aria-label="Copy message text"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#F9F9F9] hover:bg-[#FFBA00]/25 border border-slate-200 text-[10px] font-bold text-slate-700 cursor-pointer"
+                    >
+                      {copiedMsgId === msg.id ? (
+                        <>
+                          <Check className="w-3 h-3 text-[#8EBE2A]" />
+                          <span className="text-[#8EBE2A]">Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {msg.text && (
-                <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-                  {msg.text}
-                </p>
+                <div className="text-sm text-slate-800">
+                  <FormattedEmojiText text={msg.text} />
+                </div>
               )}
 
               {/* Jumbo Custom Emojis attached to message */}
@@ -189,7 +221,7 @@ export const ChatSimulatorModal: React.FC<ChatSimulatorModalProps> = ({
                     return (
                       <div
                         key={`${id}-${idx}`}
-                        className="inline-flex flex-col items-center p-2 rounded-lg bg-slate-100/70 dark:bg-slate-800/60"
+                        className="inline-flex flex-col items-center p-2 rounded-lg bg-[#F9F9F9] border border-slate-200"
                       >
                         <EmojiRenderer
                           config={emojiObj}
@@ -197,7 +229,7 @@ export const ChatSimulatorModal: React.FC<ChatSimulatorModalProps> = ({
                           animate={true}
                           showShadow={false}
                         />
-                        <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 mt-1">
+                        <span className="text-[10px] font-mono text-slate-500 mt-1">
                           {emojiObj.shortcode}
                         </span>
                       </div>
@@ -217,8 +249,8 @@ export const ChatSimulatorModal: React.FC<ChatSimulatorModalProps> = ({
                       onClick={() => handleToggleReaction(msg.id, emojiObj)}
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-mono transition-colors cursor-pointer tabular-nums ${
                         react.userReacted
-                          ? 'border-amber-500/60 bg-amber-500/10 text-amber-600 dark:text-amber-300'
-                          : 'border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300'
+                          ? 'border-[#FF4925] bg-[#FFBA00]/20 text-slate-900 font-bold'
+                          : 'border-slate-200 bg-[#F9F9F9] text-slate-700'
                       }`}
                     >
                       <EmojiRenderer
@@ -236,7 +268,7 @@ export const ChatSimulatorModal: React.FC<ChatSimulatorModalProps> = ({
                 <button
                   type="button"
                   onClick={() => handleToggleReaction(msg.id, currentConfig)}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 text-xs text-slate-500 hover:text-slate-900 dark:hover:text-white hover:border-amber-500 transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-dashed border-slate-300 text-xs text-slate-600 hover:text-[#FF4925] hover:border-[#FF4925] transition-colors cursor-pointer"
                 >
                   <SmilePlus className="w-3.5 h-3.5" />
                   <span>React {currentConfig.shortcode}</span>
@@ -249,12 +281,30 @@ export const ChatSimulatorModal: React.FC<ChatSimulatorModalProps> = ({
         {/* Message Composer */}
         <form
           onSubmit={handleSendMessage}
-          className="p-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-3"
+          className="p-4 border-t border-slate-200 bg-white space-y-3"
         >
-          {/* Emoji Picker Strip */}
+          {/* Quick Inline Unicode Emojis */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+            <span className="text-xs font-bold text-slate-600 shrink-0 mr-1">
+              Insert Emoji:
+            </span>
+            {QUICK_UNICODE_EMOJIS.map((char) => (
+              <button
+                key={char}
+                type="button"
+                onClick={() => setDraftText((prev) => `${prev}${prev.endsWith(' ') || !prev ? '' : ' '}${char} `)}
+                className="w-8 h-8 rounded-lg bg-[#F9F9F9] hover:bg-[#FFBA00]/25 border border-slate-200 flex items-center justify-center text-base cursor-pointer shrink-0"
+                title={`Insert ${char}`}
+              >
+                <span className="memo-emoji-span">{char}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Custom Sticker Picker Strip */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1">
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400 shrink-0">
-              Attach Emoji:
+            <span className="text-xs font-bold text-slate-600 shrink-0">
+              Attach Sticker:
             </span>
             {availableEmojis.map((emo) => {
               const isAttached = selectedEmojisForDraft.includes(emo.id);
@@ -265,8 +315,8 @@ export const ChatSimulatorModal: React.FC<ChatSimulatorModalProps> = ({
                   onClick={() => toggleDraftEmoji(emo.id)}
                   className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-mono shrink-0 transition-all cursor-pointer ${
                     isAttached
-                      ? 'border-amber-500 bg-amber-500/15 text-slate-900 dark:text-white'
-                      : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+                      ? 'border-[#FF4925] bg-[#FFBA00]/20 text-slate-900 font-bold'
+                      : 'border-slate-200 bg-[#F9F9F9] text-slate-600 hover:border-slate-300'
                   }`}
                 >
                   <EmojiRenderer config={emo} size={22} animate={false} showShadow={false} />
@@ -283,11 +333,11 @@ export const ChatSimulatorModal: React.FC<ChatSimulatorModalProps> = ({
               placeholder={`Message #design-ship-room with ${currentConfig.shortcode}...`}
               value={draftText}
               onChange={(e) => setDraftText(e.target.value)}
-              className="flex-1 px-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-amber-500"
+              className="flex-1 px-3.5 py-2 rounded-xl border border-slate-200 bg-[#F9F9F9] text-sm text-slate-900 focus:outline-none focus:border-[#FF4925]"
             />
             <button
               type="submit"
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#FF4925] hover:bg-[#E97A11] text-white font-bold text-xs transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Send className="w-3.5 h-3.5" />
               <span>Send</span>

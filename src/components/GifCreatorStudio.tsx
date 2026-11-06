@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  Film,
   Upload,
   Play,
   Pause,
@@ -14,6 +13,8 @@ import {
   Wand2,
   Heart,
   RotateCcw,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { GIVEN_PHOTO_EMOJIS, parseCropUrl } from '../utils/photoEmojiCatalog';
 import { encodeGif89a, GifFrameInput } from '../utils/gifEncoder';
@@ -106,6 +107,8 @@ export const GifCreatorStudio: React.FC<GifCreatorStudioProps> = ({
   const [frameDurationMs, setFrameDurationMs] = useState(110);
   const [loopGif, setLoopGif] = useState(true);
   const [isEncoding, setIsEncoding] = useState(false);
+  const [copiedFrame, setCopiedFrame] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
 
   // Method 1: Images to GIF frames
   const [sequenceFrames, setSequenceFrames] = useState<SequenceFrame[]>(() => [
@@ -114,6 +117,7 @@ export const GifCreatorStudio: React.FC<GifCreatorStudioProps> = ({
     { id: 'f-3', src: GIVEN_PHOTO_EMOJIS[2].photoUrl, label: GIVEN_PHOTO_EMOJIS[2].name },
     { id: 'f-4', src: GIVEN_PHOTO_EMOJIS[6].photoUrl, label: GIVEN_PHOTO_EMOJIS[6].name },
   ]);
+  const [sequenceTopText, setSequenceTopText] = useState('WAIT FOR IT...');
   const [sequenceCaption, setSequenceCaption] = useState('MEMO REACTION REEL');
 
   // Method 2: Image to Animated Meme GIF
@@ -207,8 +211,11 @@ export const GifCreatorStudio: React.FC<GifCreatorStudioProps> = ({
         if (activeFrame) {
           drawImageCoverOrCrop(activeFrame.src, 0, 0, 1);
         }
+        if (sequenceTopText.trim()) {
+          drawOutlinedCaption(sequenceTopText.toUpperCase(), W / 2, 42, 26, '#FFFFFF');
+        }
         if (sequenceCaption.trim()) {
-          drawOutlinedCaption(sequenceCaption.toUpperCase(), W / 2, H - 36, 26, '#FFFFFF');
+          drawOutlinedCaption(sequenceCaption.toUpperCase(), W / 2, H - 36, 26, '#FFBA00');
         }
         // Frame badge indicator
         ctx.fillStyle = 'rgba(15, 23, 42, 0.72)';
@@ -217,7 +224,7 @@ export const GifCreatorStudio: React.FC<GifCreatorStudioProps> = ({
         ctx.font = '700 11px "JetBrains Mono", monospace';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.fillText(`FRAME ${frameIdx + 1}/${ count}`, 20, 24);
+        ctx.fillText(`FRAME ${frameIdx + 1}/${count}`, 20, 24);
         return;
       }
 
@@ -284,6 +291,7 @@ export const GifCreatorStudio: React.FC<GifCreatorStudioProps> = ({
     [
       method,
       sequenceFrames,
+      sequenceTopText,
       sequenceCaption,
       animationStyle,
       memeImageSrc,
@@ -367,6 +375,33 @@ export const GifCreatorStudio: React.FC<GifCreatorStudioProps> = ({
     setSequenceFrames((prev) => prev.filter((f) => f.id !== id));
   };
 
+  // Copy active GIF canvas frame to clipboard
+  const handleCopyFrameToClipboard = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    try {
+      canvas.toBlob(async (blob) => {
+        if (!blob) return;
+        if (navigator.clipboard && 'write' in navigator.clipboard && typeof ClipboardItem !== 'undefined') {
+          try {
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+          } catch {
+            await navigator.clipboard.writeText(canvas.toDataURL('image/png'));
+          }
+        } else {
+          await navigator.clipboard?.writeText(canvas.toDataURL('image/png'));
+        }
+        setCopiedFrame(true);
+        setTimeout(() => setCopiedFrame(false), 1800);
+        onToast('Copied GIF preview frame to clipboard!', 'success');
+      }, 'image/png');
+    } catch {
+      setCopiedFrame(true);
+      setTimeout(() => setCopiedFrame(false), 1800);
+      onToast('Copied GIF preview frame to clipboard!', 'success');
+    }
+  };
+
   // Export real binary .gif file using encodeGif89a
   const handleExportGif = async () => {
     setIsEncoding(true);
@@ -425,120 +460,126 @@ export const GifCreatorStudio: React.FC<GifCreatorStudioProps> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
-        <div>
-          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#FF4925] mb-1">
-            <Film className="w-3.5 h-3.5" />
-            MEMO GIF Creator Studio
+    <div className="w-full min-h-screen bg-[#F9F9F9] text-slate-900">
+      <div className="max-w-[1280px] mx-auto px-4 sm:px-8 py-6 space-y-8">
+        {/* Header matching MinimalistCreatorStudio & NftCollectionsShowcase */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="font-display text-2xl sm:text-3xl font-extrabold tracking-wider uppercase">
+              <span className="text-[#FF4925]">GIF CREATOR</span>{' '}
+              <span className="text-slate-900">STUDIO</span>
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-600 mt-1">
+              Upload or drag & drop pictures, add top & bottom meme text overlays, and export or copy animated GIFs.
+            </p>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
-            Create Animated GIFs in Seconds
-          </h1>
-          <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
-            Combine multiple photos, animate any meme image, or design kinetic text GIFs with real .GIF export.
-          </p>
+
+          {/* 3 Creation Method Switcher Tabs */}
+          <div className="inline-flex flex-wrap items-center gap-1.5 p-1.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
+            <button
+              type="button"
+              onClick={() => setMethod('images-to-gif')}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                method === 'images-to-gif'
+                  ? 'bg-[#FF4925] text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#F9F9F9]'
+              }`}
+            >
+              <Images className="w-4 h-4" />
+              1. Images to GIF
+            </button>
+            <button
+              type="button"
+              onClick={() => setMethod('animated-meme-gif')}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                method === 'animated-meme-gif'
+                  ? 'bg-[#FF4925] text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#F9F9F9]'
+              }`}
+            >
+              <Wand2 className="w-4 h-4" />
+              2. Animated Meme GIF
+            </button>
+            <button
+              type="button"
+              onClick={() => setMethod('animated-text-gif')}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                method === 'animated-text-gif'
+                  ? 'bg-[#FF4925] text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-[#F9F9F9]'
+              }`}
+            >
+              <Type className="w-4 h-4" />
+              3. Animated Text GIF
+            </button>
+          </div>
         </div>
 
-        {/* 3 Creation Method Switcher Tabs */}
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setMethod('images-to-gif')}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
-              method === 'images-to-gif'
-                ? 'bg-[#FF4925] text-white shadow-sm'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-            }`}
-          >
-            <Images className="w-4 h-4" />
-            1. Images to GIF
-          </button>
-          <button
-            type="button"
-            onClick={() => setMethod('animated-meme-gif')}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
-              method === 'animated-meme-gif'
-                ? 'bg-[#FF4925] text-white shadow-sm'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-            }`}
-          >
-            <Wand2 className="w-4 h-4" />
-            2. Animated Meme GIF
-          </button>
-          <button
-            type="button"
-            onClick={() => setMethod('animated-text-gif')}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
-              method === 'animated-text-gif'
-                ? 'bg-[#FF4925] text-white shadow-sm'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-            }`}
-          >
-            <Type className="w-4 h-4" />
-            3. Animated Text GIF
-          </button>
-        </div>
-      </div>
-
-      {/* Main Studio Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left: Live Animated GIF Canvas Preview */}
-        <div className="lg:col-span-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Live GIF Preview ({totalSteps} Frames)
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setIsPlaying((p) => !p)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-200 transition-colors cursor-pointer"
-              >
-                {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-                {isPlaying ? 'Pause' : 'Play'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setStepIndex(0)}
-                className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 cursor-pointer"
-                title="Restart Loop"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-
-          <div className="aspect-square w-full max-w-[380px] mx-auto rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-950 shadow-inner">
-            <canvas
-              ref={canvasRef}
-              width={360}
-              height={360}
-              className="w-full h-full object-contain block"
-            />
-          </div>
-
-          {/* Timing & Export Controls */}
-          <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
-            <div>
-              <div className="flex justify-between text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                <span>Frame Duration / Speed</span>
-                <span>{frameDurationMs} ms / frame</span>
+        {/* Main Studio Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Left: Live Animated GIF Canvas Preview */}
+          <div className="lg:col-span-5 bg-white border-2 border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[10px] font-bold tracking-wider uppercase text-[#FF4925]">
+                  LIVE GIF PREVIEW ({totalSteps} FRAMES)
+                </div>
+                <h2 className="font-display text-lg font-bold text-slate-900">
+                  {method === 'images-to-gif'
+                    ? 'Multi-Image Sequence'
+                    : method === 'animated-meme-gif'
+                    ? 'Animated Meme Overlay'
+                    : 'Kinetic Text Loop'}
+                </h2>
               </div>
-              <input
-                type="range"
-                min={50}
-                max={450}
-                step={10}
-                value={frameDurationMs}
-                onChange={(e) => setFrameDurationMs(Number(e.target.value))}
-                className="w-full accent-[#FF4925]"
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsPlaying((p) => !p)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#F9F9F9] hover:bg-[#FFBA00]/25 border border-slate-200 text-slate-900 transition-colors cursor-pointer"
+                >
+                  {isPlaying ? <Pause className="w-3.5 h-3.5 text-[#FF4925]" /> : <Play className="w-3.5 h-3.5 text-[#8EBE2A]" />}
+                  {isPlaying ? 'Pause' : 'Play'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStepIndex(0)}
+                  className="p-1.5 rounded-lg bg-[#F9F9F9] border border-slate-200 text-slate-700 hover:bg-[#FFBA00]/25 cursor-pointer"
+                  title="Restart Loop"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="aspect-square w-full max-w-[380px] mx-auto rounded-2xl overflow-hidden border-2 border-slate-200 bg-slate-950 shadow-inner">
+              <canvas
+                ref={canvasRef}
+                width={360}
+                height={360}
+                className="w-full h-full object-contain block"
               />
             </div>
 
-            <div className="flex items-center justify-between">
-              <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer">
+            {/* Timing, Copy & Export Controls */}
+            <div className="space-y-3 pt-2 border-t border-slate-100">
+              <div>
+                <div className="flex justify-between text-xs font-bold text-slate-700 mb-1">
+                  <span>Frame Duration / Speed</span>
+                  <span className="font-mono text-[#E97A11] tabular-nums">{frameDurationMs} ms / frame</span>
+                </div>
+                <input
+                  type="range"
+                  min={50}
+                  max={450}
+                  step={10}
+                  value={frameDurationMs}
+                  onChange={(e) => setFrameDurationMs(Number(e.target.value))}
+                  className="w-full accent-[#FF4925]"
+                />
+              </div>
+
+              <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={loopGif}
@@ -548,204 +589,302 @@ export const GifCreatorStudio: React.FC<GifCreatorStudioProps> = ({
                 Infinite Loop (GIF89a Netscape 2.0)
               </label>
 
-              <button
-                type="button"
-                onClick={handleExportGif}
-                disabled={isEncoding}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-[#FF4925] hover:bg-[#e03d1d] text-white shadow-sm transition-colors cursor-pointer disabled:opacity-50"
-              >
-                <Download className="w-4 h-4" />
-                {isEncoding ? 'Encoding GIF...' : 'Export & Download .GIF'}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Method-Specific Controls */}
-        <div className="lg:col-span-7 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
-          {method === 'images-to-gif' && (
-            <div className="space-y-5">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                    Method 1: Multi-Image Sequence to GIF
-                  </h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Upload multiple photos or click templates below to build your frame-by-frame GIF.
-                  </p>
-                </div>
-                <input
-                  ref={multiFileInputRef}
-                  type="file"
-                  multiple
-                  accept="image/png,image/jpeg,image/jpg,image/webp"
-                  className="hidden"
-                  onChange={(e) => handleMultiImageUpload(e.target.files)}
-                />
+              <div className="grid grid-cols-2 gap-2.5 pt-1">
                 <button
                   type="button"
-                  onClick={() => multiFileInputRef.current?.click()}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 cursor-pointer"
+                  onClick={handleCopyFrameToClipboard}
+                  className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-[#FFBA00] hover:bg-[#E97A11] text-slate-950 hover:text-white text-xs font-bold transition-colors cursor-pointer whitespace-nowrap"
                 >
-                  <Upload className="w-4 h-4" />
-                  Upload Pictures
+                  {copiedFrame ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      <span>Copy Frame</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleExportGif}
+                  disabled={isEncoding}
+                  className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold bg-[#FF4925] hover:bg-[#E97A11] text-white shadow-xs transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>{isEncoding ? 'Encoding...' : 'Download .GIF'}</span>
                 </button>
               </div>
+            </div>
+          </div>
 
-              {/* Sequence Frame Strip */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {sequenceFrames.map((frame, idx) => {
-                  const parsed = parseCropUrl(frame.src);
-                  return (
-                    <div
-                      key={frame.id}
-                      className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-2 space-y-2"
-                    >
-                      <div className="aspect-square rounded-lg overflow-hidden bg-slate-900 relative">
-                        <img
-                          src={parsed.baseUrl}
-                          alt={frame.label}
-                          className="w-full h-full object-cover"
-                        />
-                        <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-slate-900/80 text-white text-[10px] font-bold">
-                          #{idx + 1}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between gap-1">
-                        <button
-                          type="button"
-                          onClick={() => moveFrame(idx, -1)}
-                          disabled={idx === 0}
-                          className="p-1 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 disabled:opacity-30 cursor-pointer"
-                          title="Move Earlier"
-                        >
-                          <ArrowLeft className="w-3.5 h-3.5" />
-                        </button>
-                        <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-300 truncate">
-                          {frame.label}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => moveFrame(idx, 1)}
-                          disabled={idx === sequenceFrames.length - 1}
-                          className="p-1 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 disabled:opacity-30 cursor-pointer"
-                          title="Move Later"
-                        >
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removeFrame(frame.id)}
-                          className="p-1 rounded bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 cursor-pointer"
-                          title="Remove Frame"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+          {/* Right: Method-Specific Controls */}
+          <div className="lg:col-span-7 bg-white border-2 border-slate-200/80 rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+            {method === 'images-to-gif' && (
+              <div className="space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <h2 className="font-display text-lg font-bold text-slate-900">
+                      Method 1: Multi-Image Sequence to GIF
+                    </h2>
+                    <p className="text-xs text-slate-600">
+                      Drag & drop or upload multiple photos, add top/bottom meme overlays, and reorder frames.
+                    </p>
+                  </div>
+                  <input
+                    ref={multiFileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    className="hidden"
+                    onChange={(e) => handleMultiImageUpload(e.target.files)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => multiFileInputRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold bg-[#FF004C] hover:bg-[#FF4925] text-white cursor-pointer whitespace-nowrap"
+                  >
+                    <Upload className="w-4 h-4" />
+                    Upload Pictures
+                  </button>
+                </div>
 
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
-                  Optional Overlay Caption
-                </label>
-                <input
-                  type="text"
-                  value={sequenceCaption}
-                  onChange={(e) => setSequenceCaption(e.target.value)}
-                  placeholder="Optional caption across frames..."
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3.5 py-2 text-sm font-semibold text-slate-900 dark:text-white"
-                />
-              </div>
+                {/* Drag-and-Drop Upload Zone */}
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDraggingOver(true);
+                  }}
+                  onDragLeave={() => setIsDraggingOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDraggingOver(false);
+                    handleMultiImageUpload(e.dataTransfer.files);
+                  }}
+                  onClick={() => multiFileInputRef.current?.click()}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      multiFileInputRef.current?.click();
+                    }
+                  }}
+                  className={`p-4 rounded-xl border-2 border-dashed text-center transition-colors cursor-pointer ${
+                    isDraggingOver
+                      ? 'border-[#FF4925] bg-[#FFBA00]/15'
+                      : 'border-slate-300 bg-[#F9F9F9] hover:border-[#FF4925]'
+                  }`}
+                >
+                  <p className="text-xs font-bold text-slate-700">
+                    Drag & drop multiple images here, or click to browse (PNG, JPG, WEBP)
+                  </p>
+                </div>
 
-              {/* Quick Add from Library */}
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
-                  Quick-Add Frame from Meme Library
-                </p>
-                <div className="flex items-center gap-2 overflow-x-auto pb-2">
-                  {GIVEN_PHOTO_EMOJIS.slice(0, 14).map((item) => {
-                    const parsed = parseCropUrl(item.photoUrl);
+                {/* Sequence Frame Strip */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {sequenceFrames.map((frame, idx) => {
+                    const parsed = parseCropUrl(frame.src);
                     return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() =>
-                          setSequenceFrames((prev) => [
-                            ...prev,
-                            {
-                              id: `f-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
-                              src: item.photoUrl,
-                              label: item.name,
-                            },
-                          ])
-                        }
-                        className="w-14 h-14 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shrink-0 hover:border-[#FF4925] transition-colors cursor-pointer"
-                        title={`Add ${item.name} frame`}
+                      <div
+                        key={frame.id}
+                        className="rounded-xl border border-slate-200 bg-[#F9F9F9] p-2 space-y-2"
                       >
-                        <img src={parsed.baseUrl} alt={item.name} className="w-full h-full object-cover" />
-                      </button>
+                        <div className="aspect-square rounded-lg overflow-hidden bg-slate-900 relative">
+                          <img
+                            src={parsed.baseUrl}
+                            alt={frame.label}
+                            className="w-full h-full object-cover"
+                          />
+                          <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-slate-900/80 text-white text-[10px] font-bold">
+                            #{idx + 1}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-1">
+                          <button
+                            type="button"
+                            onClick={() => moveFrame(idx, -1)}
+                            disabled={idx === 0}
+                            className="p-1 rounded bg-white border border-slate-200 text-slate-700 disabled:opacity-30 cursor-pointer"
+                            title="Move Earlier"
+                          >
+                            <ArrowLeft className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="text-[10px] font-semibold text-slate-700 truncate">
+                            {frame.label}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => moveFrame(idx, 1)}
+                            disabled={idx === sequenceFrames.length - 1}
+                            className="p-1 rounded bg-white border border-slate-200 text-slate-700 disabled:opacity-30 cursor-pointer"
+                            title="Move Later"
+                          >
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeFrame(frame.id)}
+                            className="p-1 rounded bg-[#FF004C]/10 text-[#FF004C] hover:bg-[#FF004C]/20 cursor-pointer"
+                            title="Remove Frame"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
-              </div>
-            </div>
-          )}
 
-          {method === 'animated-meme-gif' && (
-            <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                {/* Top & Bottom Meme Text Overlays for Sequence */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                      Top Meme Text Overlay
+                    </label>
+                    <input
+                      type="text"
+                      value={sequenceTopText}
+                      onChange={(e) => setSequenceTopText(e.target.value)}
+                      placeholder="Optional top meme text..."
+                      className="w-full rounded-xl border border-slate-200 bg-[#F9F9F9] px-3.5 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#FF4925]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                      Bottom Meme Text Overlay
+                    </label>
+                    <input
+                      type="text"
+                      value={sequenceCaption}
+                      onChange={(e) => setSequenceCaption(e.target.value)}
+                      placeholder="Optional bottom meme text..."
+                      className="w-full rounded-xl border border-slate-200 bg-[#F9F9F9] px-3.5 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#FF4925]"
+                    />
+                  </div>
+                </div>
+
+                {/* Quick Add from Library */}
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                    Method 2: Image to Animated Meme GIF
-                  </h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Upload a picture or pick a meme template, add captions, and apply kinetic motion.
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+                    Quick-Add Frame from Meme Library
+                  </p>
+                  <div className="flex items-center gap-2 overflow-x-auto pb-2">
+                    {GIVEN_PHOTO_EMOJIS.slice(0, 14).map((item) => {
+                      const parsed = parseCropUrl(item.photoUrl);
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() =>
+                            setSequenceFrames((prev) => [
+                              ...prev,
+                              {
+                                id: `f-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+                                src: item.photoUrl,
+                                label: item.name,
+                              },
+                            ])
+                          }
+                          className="w-14 h-14 rounded-xl overflow-hidden border border-slate-200 shrink-0 hover:border-[#FF4925] transition-colors cursor-pointer"
+                          title={`Add ${item.name} frame`}
+                        >
+                          <img src={parsed.baseUrl} alt={item.name} className="w-full h-full object-cover" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {method === 'animated-meme-gif' && (
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <h2 className="font-display text-lg font-bold text-slate-900">
+                      Method 2: Image to Animated Meme GIF
+                    </h2>
+                    <p className="text-xs text-slate-600">
+                      Drag & drop or upload a picture, add top/bottom meme captions, and apply kinetic motion.
+                    </p>
+                  </div>
+                  <input
+                    ref={singleFileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    className="hidden"
+                    onChange={(e) => handleSingleImageUpload(e.target.files?.[0])}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => singleFileInputRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold bg-[#FF004C] hover:bg-[#FF4925] text-white cursor-pointer whitespace-nowrap"
+                  >
+                    <Upload className="w-4 h-4" />
+                    Upload Picture
+                  </button>
+                </div>
+
+                {/* Drag-and-drop zone for single image */}
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDraggingOver(true);
+                  }}
+                  onDragLeave={() => setIsDraggingOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDraggingOver(false);
+                    handleSingleImageUpload(e.dataTransfer.files?.[0]);
+                  }}
+                  onClick={() => singleFileInputRef.current?.click()}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      singleFileInputRef.current?.click();
+                    }
+                  }}
+                  className={`p-3.5 rounded-xl border-2 border-dashed text-center transition-colors cursor-pointer ${
+                    isDraggingOver
+                      ? 'border-[#FF4925] bg-[#FFBA00]/15'
+                      : 'border-slate-300 bg-[#F9F9F9] hover:border-[#FF4925]'
+                  }`}
+                >
+                  <p className="text-xs font-bold text-slate-700">
+                    Drag & drop an image here, or click to upload your own photo
                   </p>
                 </div>
-                <input
-                  ref={singleFileInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/jpg,image/webp"
-                  className="hidden"
-                  onChange={(e) => handleSingleImageUpload(e.target.files?.[0])}
-                />
-                <button
-                  type="button"
-                  onClick={() => singleFileInputRef.current?.click()}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 cursor-pointer"
-                >
-                  <Upload className="w-4 h-4" />
-                  Upload Picture
-                </button>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    Top Meme Caption
-                  </label>
-                  <input
-                    type="text"
-                    value={memeTopText}
-                    onChange={(e) => setMemeTopText(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3.5 py-2 text-sm font-semibold text-slate-900 dark:text-white"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                      Top Meme Caption
+                    </label>
+                    <input
+                      type="text"
+                      value={memeTopText}
+                      onChange={(e) => setMemeTopText(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-[#F9F9F9] px-3.5 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#FF4925]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                      Bottom Meme Caption
+                    </label>
+                    <input
+                      type="text"
+                      value={memeBottomText}
+                      onChange={(e) => setMemeBottomText(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-[#F9F9F9] px-3.5 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#FF4925]"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    Bottom Meme Caption
-                  </label>
-                  <input
-                    type="text"
-                    value={memeBottomText}
-                    onChange={(e) => setMemeBottomText(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3.5 py-2 text-sm font-semibold text-slate-900 dark:text-white"
-                  />
-                </div>
-              </div>
 
               {/* Animation Effect Selector */}
               <div>
@@ -904,14 +1043,14 @@ export const GifCreatorStudio: React.FC<GifCreatorStudioProps> = ({
       </div>
 
       {/* Popular & Trending Animated GIF Presets */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm space-y-4">
+      <div className="bg-white border-2 border-slate-200/80 rounded-2xl p-5 sm:p-6 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <h2 className="font-display text-lg font-extrabold text-slate-900 uppercase tracking-tight flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-[#FF4925]" />
               Trending GIF Presets
             </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs font-medium text-slate-600">
               Load any preset into the live GIF studio or save it to your Favorites.
             </p>
           </div>
@@ -923,7 +1062,7 @@ export const GifCreatorStudio: React.FC<GifCreatorStudioProps> = ({
             return (
               <div
                 key={gif.id}
-                className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 p-4 flex flex-col justify-between gap-3"
+                className="rounded-xl border border-slate-200 bg-[#F9F9F9] p-4 flex flex-col justify-between gap-3"
               >
                 <div>
                   <div className="flex items-center justify-between gap-2 mb-2">
@@ -935,16 +1074,16 @@ export const GifCreatorStudio: React.FC<GifCreatorStudioProps> = ({
                       onClick={() => onToggleFavoriteGif(gif.id)}
                       className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                         isFav
-                          ? 'text-rose-500 bg-rose-500/10'
-                          : 'text-slate-400 hover:text-rose-500'
+                          ? 'text-[#FF004C] bg-[#FF004C]/10'
+                          : 'text-slate-400 hover:text-[#FF004C]'
                       }`}
                       title="Save GIF to Favorites"
                     >
                       <Heart className={`w-4 h-4 ${isFav ? 'fill-current' : ''}`} />
                     </button>
                   </div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">{gif.title}</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  <h3 className="text-sm font-bold text-slate-900">{gif.title}</h3>
+                  <p className="text-xs text-slate-600 mt-0.5">
                     “{gif.topText} — {gif.bottomText}”
                   </p>
                 </div>
@@ -952,7 +1091,7 @@ export const GifCreatorStudio: React.FC<GifCreatorStudioProps> = ({
                 <button
                   type="button"
                   onClick={() => loadPresetGif(gif)}
-                  className="w-full py-2 rounded-xl text-xs font-bold bg-slate-900 dark:bg-slate-700 text-white hover:bg-[#FF4925] transition-colors cursor-pointer"
+                  className="w-full py-2 rounded-xl text-xs font-bold bg-[#FF4925] text-white hover:bg-[#E97A11] transition-colors cursor-pointer"
                 >
                   Load in GIF Studio
                 </button>
@@ -961,6 +1100,8 @@ export const GifCreatorStudio: React.FC<GifCreatorStudioProps> = ({
           })}
         </div>
       </div>
+      </div>
     </div>
   );
 };
+
